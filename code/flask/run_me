@@ -1,0 +1,8 @@
+# first command
+# curl http://127.0.0.1:5000/register -H "Content-Type:application/json" -d '{"username":"commando_user6", "password":"testpw", "email":"testemail", "firstName":"testFN", "lastName":"lasttest", "userType":"customer"}' -X POST
+
+# second command
+# curl http://127.0.0.1:5000/login -H "Content-Type:application/json" -d '{"username":"commando_user6", "password":"testpw", "email":"testemail", "firstName":"testFN", "lastName":"lasttest", "userType":"customer"}' -X POST
+
+# third command
+curl http://127.0.0.1:5000/events -X GET
