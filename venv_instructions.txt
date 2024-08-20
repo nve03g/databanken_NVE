@@ -1,0 +1,12 @@
+COMMANDS TO RUN IN TERMINAL WHEN CREATING NEW PROJECT (USING FLASK)
+% mkdir ~/project
+% cd ~/project
+% virtualenv flask
+% cd flask
+% source bin/activate
+% pip install Flask
+% pip install flask_restful
+% touch app.py
+
+!!IMPORTANT!!
+delete the (hidden (cmd + SHIFT + .)) .gitignore file inthe <flask> folder to be able to commit changes in sourcetree
