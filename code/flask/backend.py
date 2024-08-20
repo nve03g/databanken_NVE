@@ -8,9 +8,12 @@ from flask_httpauth import HTTPBasicAuth
 app = Flask(__name__)
 api = Api(app, prefix="/api/v1")
 auth = HTTPBasicAuth() # set up basic authentication
+# possible authentication modes:
+# HTTPBasicAuth, HTTPDigestAuth, HTTPTokenAuth
 
 USER_DATA = { # this should be imported from your database
-	"admin": "SuperSecretPwd"
+	"admin": "adminPW"
+	"user": "userPW"
 }
 
 @auth.verify_password
@@ -19,8 +22,16 @@ def verify(username, password):
 		return False
 	return USER_DATA.get(username)==password
 
+# zorgen dat er geen critical gegevens via postman gegeven worden, dat kan hacker dan ook doen, doe zoveel mogelijk in code zelf (queries) => security ligt op de server
+"""
+user role bepalen bij verify_password, als gevonden in host table dan set role to host
+"""
+# @auth.login_required(role='admin')
+# def admin_only(self):
+# 	return "Hello {}, you are an admin!".format(auth.current_user())
+
 class PrivateR(Resource):
-	@auth.login_required # decorator that states login is required
+	@auth.login_required # decorator that states login is required, to protect this resources' get() from unauthorized users
 	def get(self):
 		return {"meaning of life": 42}
 
