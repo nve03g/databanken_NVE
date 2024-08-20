@@ -1,0 +1,46 @@
+ER Diagram
+
+De centrale entiteit is Event, dit is een concreet event (vb. "Rock Werchter editie 2024"):
+
+* met een bepaalde naam (name) en poster image (posterURL)
+* dat doorgaat op een bepaald tijdstip (date / time)
+* op een bepaalde locatie (1 locationID FK)
+* geörganiseerd door een bepaalde host (1 hostID FK)
+* dat onder een bepaalde categorie valt (category)
+* waarop een reeks artiesten / bands komt optreden (artists)
+* en dat al dan niet momenteel tickets in de verkoop heeft (onSale)
+
+Gemaakte design keuzes om het enigszins simpel te houden:
+
+1. Een category is een simpele string, als attribuut van event, kan bvb. een enkele categorie beschrijven of meerdere categorieën oplijsten (comma separated). Volgens huidige requirements lijkt dit voldoende. Wanneer men zou moeten kunnen zoeken op events van een bepaalde categorie, kan dit uitgebreid worden naar een aparte entiteit Category met een N:M relatie naar Event.
+
+2. Analoog: 'artists' is momenteel een comma separated string attribuut van event, kan eventueel later aparte entiteit Artist worden met N:M relatie naar Event.
+
+Een event heeft 1 of meerdere TicketTiers, elk:
+
+* van een bepaald type (description), vb. "front row", "standing", "VIP"
+* met een bepaalde prijs per ticket (price)
+* met een bepaald totaal aantal beschikbare tickets voor het event (totalAmount), vb. max. 50 VIP tickets
+* en een bepaald resterend aantal tickets te koop (remainingAmount), vb. nog 23 VIP tickets te koop
+
+De Host van een event:
+
+* heeft een bepaalde naam (name) bvb. "Live Nation"
+* heeft een User account op het systeem (met username, password en email)
+* heeft 1 of meerdere Locations (met adresgegevens) gelinkt aan het account
+
+Een Customer:
+
+* met voornaam / achternaam (firstName, lastName)
+* heeft een User account op het systeem
+* kan tickets kopen van een bepaald event via (0..N) PurchaseItems (cfr. shopping cart)
+
+Een PurchaseItem:
+
+* is gelinkt aan 1 customer
+* betreft (intentie tot) aankoop van een aantal (quantity) tickets van een welbepaalde tier voor een event (1 ticketTierID FK)
+
+Bij bevestiging van aankoop:
+
+* wordt aankoopdatum ingevuld in PurchaseItem (purchaseDate)
+* worden N concrete Tickets aangemaakt, gelinkt aan PurchaseItem (en zo aan Customer), met een uniek ticketID. Dit ticketID kan dan bij het betreden van het event worden gescand en afgevinkt (maar dit is buiten scope van de opdracht).
