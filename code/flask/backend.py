@@ -1,58 +1,372 @@
-from flask import Flask, jsonify
+import flask
+from flask import Flask, request, jsonify, redirect, render_template
 from flask_restful import Resource, Api
-from flask_httpauth import HTTPBasicAuth
 import sqlite3 as sql
+from flask import session
+
 
 ## creating app and its API
 app = Flask(__name__)
-api = Api(app, prefix="/api/v1")
-auth = HTTPBasicAuth() # set up basic authentication
-# user authentication tutorial: https://www.youtube.com/watch?v=jAgll-Z5mc8
-# possible authentication modes:
-# HTTPBasicAuth, HTTPDigestAuth, HTTPTokenAuth
+app.secret_key = "mySecretKey123"  # stel een geheime sleutel in voor sessiebeveiliging
+api = Api(app)
 
-# database handling
-dbName = "my_database.db"
-### --------------------------------------------REMOVE THIS----------------------------------------------- ###
-USER_DATA = { # this should be imported from your database
-	"admin": "adminPW",
-	"user": "userPW"
-}
-EVENT_DATA = {
-	0: ["name0", "date0", "time0", "location0", "host0", "poster0", "category0", "sale0", "artists0"],
-	1: ["name1", "date1", "time1", "location1", "host1", "poster1", "category1", "sale1", "artists1"],
-	2: ["name2", "date2", "time2", "location2", "host2", "poster2", "category2", "sale2", "artists2"]
-}
-### ------------------------------------------------------------------------------------------------------ ###
+## connection to database
+## !! open and close the connection as close to the actual database operations as possible !!
+dbName = "autocreated.db"
 
-# maybe predefine queries here?
+## definition of classes
 
-@auth.verify_password
-def verify(username, password):
-	if not (username and password):
-		return False
-	return USER_DATA.get(username)==password
+# resource for displaying all events or a specific event, possibility to filter based on category
+class EventsR(Resource):
+	def get(self, category=None, eventID=None):
+		if eventID: # display specific event
+			my_query = """
+                SELECT 
+                    Event.name AS event_name,
+                    Event.date AS event_date,
+                    Event.time AS event_time,
+                    Location.address || ', ' || Location.zipcode || ', ' || Location.city || ', ' || Location.country AS location,
+                    Event.posterURL AS poster_image,
+                    TicketTier.price AS ticket_price,
+                    TicketTier.remainingAmount AS tickets_remaining,
+                    Event.artists AS artists_or_bands,
+                    Host.name AS event_host
+                FROM 
+                    Event
+                INNER JOIN 
+                    Location ON Event.locationID = Location.locationID
+                INNER JOIN 
+                    Host ON Event.hostID = Host.hostID
+                INNER JOIN 
+                    TicketTier ON Event.eventID = TicketTier.eventID
+                WHERE 
+                    Event.date > date('now')
+                    AND Event.eventID = ?
+                ORDER BY 
+                    Event.date ASC, Event.time ASC;
+                """
+			with sql.connect(dbName, check_same_thread=False) as conn:
+				response = conn.execute(my_query, (eventID,)).fetchone() # FETCH ONE
+			if response: # dus als er een event is met dit eventID
+				result = {
+					"Event name": response[0],
+					"Date": response[1],
+					"Time": response[2],
+					"Location": response[3],
+					"Link to poster": response[4],
+					"Ticket price": response[5],
+					"Tickets remaining": response[6],
+					"Artists/bands": response[7],
+					"Event host": response[8]
+				}
+				return jsonify(result)
+			else:
+				return {"Not Found": "Event not found"}, 404
+		else:
+			if category: # display events based on category
+				my_query = """
+                    SELECT 
+                        Event.name AS event_name,
+                        Event.date AS event_date,
+                        Event.time AS event_time,
+                        Location.address || ', ' || Location.zipcode || ', ' || Location.city || ', ' || Location.country AS location,
+                        Event.posterURL AS poster_image,
+                        TicketTier.price AS ticket_price,
+                        TicketTier.remainingAmount AS tickets_remaining,
+                        Event.artists AS artists_or_bands,
+                        Host.name AS event_host
+                    FROM 
+                        Event
+                    INNER JOIN 
+                        Location ON Event.locationID = Location.locationID
+                    INNER JOIN 
+                        Host ON Event.hostID = Host.hostID
+                    INNER JOIN 
+                        TicketTier ON Event.eventID = TicketTier.eventID
+                    WHERE 
+                        Event.date > date('now')
+						AND Event.category = ?
+                    ORDER BY 
+                        Event.date ASC, Event.time ASC;
+                    """
+				with sql.connect(dbName, check_same_thread=False) as conn:
+					response = conn.execute(my_query,(category,)).fetchall() # response type: list			
+			else: # display all events
+				my_query = """
+                    SELECT 
+                        Event.name AS event_name,
+                        Event.date AS event_date,
+                        Event.time AS event_time,
+                        Location.address || ', ' || Location.zipcode || ', ' || Location.city || ', ' || Location.country AS location,
+                        Event.posterURL AS poster_image,
+                        TicketTier.price AS ticket_price,
+                        TicketTier.remainingAmount AS tickets_remaining,
+                        Event.artists AS artists_or_bands,
+                        Host.name AS event_host
+                    FROM 
+                        Event
+                    INNER JOIN 
+                        Location ON Event.locationID = Location.locationID
+                    INNER JOIN 
+                        Host ON Event.hostID = Host.hostID
+                    INNER JOIN 
+                        TicketTier ON Event.eventID = TicketTier.eventID
+                    WHERE 
+                        Event.date > date('now')
+                    ORDER BY 
+                        Event.date ASC, Event.time ASC;
+                    """
+				with sql.connect(dbName, check_same_thread=False) as conn:
+					response = conn.execute(my_query).fetchall() # response type: list
+			result = [
+				{
+					"Event name": element[0],
+					"Date": element[1],
+					"Time": element[2],
+					"Location": element[3],
+					"Link to poster": element[4],
+					"Ticket price": element[5],
+					"Tickets remaining": element[6],
+					"Artists/bands": element[7],
+					"Event host": element[8]
+				}
+				for element in response
+			]
+			return jsonify({"events": result})
 
-# zorgen dat er geen critical gegevens via postman gegeven worden, dat kan hacker dan ook doen, doe zoveel mogelijk in code zelf (queries) => security ligt op de server
-"""
-user role bepalen bij verify_password, als gevonden in host table dan set role to host
-"""
-# user role dependence: https://flask-httpauth.readthedocs.io/en/latest/
-# @auth.login_required(role='admin')
-# def admin_only(self):
-# 	return "Hello {}, you are an admin!".format(auth.current_user())
 
-class PrivateR(Resource):
-	@auth.login_required # decorator that states login is required, to protect this resources' get() from unauthorized users
-	def get(self):
-		return {"meaning of life": 42}
+# register a new user
+class RegisterR(Resource):
+	def post(self):
+		# collect new incoming user data
+		username = request.json.get("username")
+		password = request.json.get("password")
+		email = request.json.get("email")
+		firstName = request.json.get("firstName")
+		lastName = request.json.get("lastName")
+		userType = request.json.get("userType") # provide dropdown menu in HTML code
+
+		# check whether user already exists
+		conn = sql.connect(dbName, check_same_thread=False)
+		my_query = """SELECT * FROM User WHERE username=?"""
+		response = conn.execute(my_query, (username,)).fetchone() # als response == 0 is het een nieuwe user die wilt registreren
+		if response:
+			return {"Bad Request": "Username already taken"}, 400
+		
+		# insert new user
+		cursor = conn.cursor()
+		cursor.execute("INSERT INTO User (username, password, email, firstName, lastName, userType) VALUES (?, ?, ?, ?, ?, ?)", (username, password, email, firstName, lastName, userType))
+		conn.commit()
+		conn.close()
+
+		# return success message
+		return {"Created": "User registered successfully"}, 201
 	
-    
+# login an existing user
+class LoginR(Resource):
+	def post(self): # this is a POST method because we're entering (posting) user login data to check whether they can log in or not, although we're not adding new data to the database
+		# collect login data
+		username = request.json.get('username')
+		password = request.json.get('password')
+
+        # check whether user inputs are valid
+		my_query = """SELECT * FROM User WHERE username=? AND password=?"""
+		with sql.connect(dbName, check_same_thread=False) as conn:
+			response = conn.execute(my_query, (username, password)).fetchone() # als response != 0 bestaat deze user
+		if response:
+			# save username in current session
+			session['username'] = username
+			return {"OK": "Login successful"}, 200
+		
+		# trying to log in with a non-existing user
+		return {"Unauthorized": "Invalid login data"}, 401
+
+# resource om gebruiker uit te loggen
+class LogoutR(Resource):
+	def post(self):
+        # controleer of gebruiker is ingelogd
+		if 'username' in session:
+			session.pop('username', None)
+			return {"OK": "Logout successful"}, 200
+		else:
+			return {"Bad Request": "No user is currently logged in"}, 400
+
+# resource to get all users or a specific user
+class UsersR(Resource):
+	def get(self, userID=None):
+		if userID:
+			my_query = """SELECT * FROM User WHERE userID = ?"""
+			with sql.connect(dbName, check_same_thread=False) as conn:
+				response = conn.execute(my_query, (userID,)).fetchone()
+			if response: # dus user bestaat
+				result = {
+					"userID": response[0],
+					"username": response[1],
+					"password": response[2],
+					"email": response[3]
+				}
+				return jsonify(result)
+			else:
+				return {"Not Found": "User not found"}, 404
+		else:
+			my_query = """SELECT * FROM User""" 
+			with sql.connect(dbName, check_same_thread=False) as conn:
+				response = conn.execute(my_query).fetchall()
+			result = [
+				{
+					"userID": element[0],
+					"username": element[1],
+					"password": element[2],
+					"email": element[3]
+				}
+				for element in response
+			]
+			return jsonify({"users": result})
+
+
+# resource to see or update user's shopping cart (still need to implement DELETE?)
+class ShoppingCartR(Resource):
+	def get(self, userID):
+		# controleer of gebruiker is ingelogd
+		if 'username' not in session:
+			return {"Unauthorized": "Please log in to view your shopping cart"}, 401
+		
+		# check if given userID exists
+		my_query = """SELECT * FROM User WHERE userID = ?"""
+		with sql.connect(dbName, check_same_thread=False) as conn:
+			response = conn.execute(my_query, (userID,)).fetchone()
+		if response: # dus user bestaat
+			# then check whether shopping cart is empty or not
+			my_query = """SELECT PurchaseItem.quantity, TicketTier.description, TicketTier.price, Event.name
+              FROM PurchaseItem
+              INNER JOIN TicketTier ON PurchaseItem.ticketTierID = TicketTier.ticketTierID
+              INNER JOIN Event ON TicketTier.eventID = Event.eventID
+              WHERE PurchaseItem.customerID = ?"""
+
+			with sql.connect(dbName, check_same_thread=False) as conn:
+				response = conn.execute(my_query, (userID,)).fetchall() # neem de hele shopping cart
+			if response: # dus geen lege shopping cart
+				result = [
+                    {
+                        "Quantity": element[0],
+                        "Ticket Tier": element[1],
+                        "Ticket Price": element[2],
+                        "Event Name": element[3]
+                    }
+                    for element in response]
+				# return jsonify(response)
+				return jsonify({"cart":result})
+			else:
+				return {"Not Found": "Shopping cart is empty"}, 404
+		else:
+			return {"Not Found": "User not found"}, 404
+	
+	def post(self, userID): # users can add tickets to their shopping cart
+		# collect input cart data
+		eventName = request.json.get("eventName") # provide dropdown menu in HTML code
+		ticketTier = request.json.get("ticketTier") # provide dropdown menu in HTML code
+		quantity = int(request.json.get("quantity"))
+
+		# check validity of input data
+		if not (eventName and ticketTier and quantity): # dus niet alle velden ingevuld
+			return {"Bad Request": "Missing required data"}, 400
+		
+		# check if user's shopping cart already exists
+		conn = sql.connect(dbName, check_same_thread=False)
+		cursor = conn.cursor()
+		my_query = """SELECT purchaseItemID FROM PurchaseItem WHERE customerID = ?"""
+		response = cursor.execute(my_query, (userID, )).fetchone() # als response != 0 heeft user al een shopping cart
+
+		# als user nog geen shopping cart heeft, maak er een aan
+		# if response == 0:
+		if response is None: 
+			my_query = """INSERT INTO ShoppingCart (userID) VALUES (?)"""
+			cursor.execute(my_query, (userID, ))
+			conn.commit()
+			cartID = cursor.lastrowid # get cartID of the new cart
+		else:
+			cartID = response[0] # user already has a shopping cart
+
+		# get ticketID based on eventName and ticketTier
+		my_query = """SELECT Ticket.ticketID FROM Ticket
+                      INNER JOIN Event ON Ticket.eventID = Event.eventID
+                      WHERE Event.name = ? AND Ticket.tier = ?"""
+		ticket = cursor.execute(my_query, (eventName, ticketTier)).fetchone()
+
+		if not ticket:  # if the ticket does not exist
+			conn.close()
+			return {"Bad Request": "Invalid event name or ticket tier"}, 400
+
+		ticketID = ticket[0]
+
+        # insert the new cart item
+		cursor.execute("""INSERT INTO CartItem (cartID, ticketID, quantity) VALUES (?, ?, ?)""", (cartID, ticketID, quantity))
+		conn.commit()
+		conn.close()
+
+        # return success message
+		return {"Created": "Ticket added to shopping cart"}, 201
+		
+
+# resource to get all events for a specific host
+class HostEventsR(Resource):
+    def get(self, hostID):
+        my_query = """
+            SELECT Event.eventID, Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, 
+                   COUNT(Ticket.ticketID) AS ticketsSold
+            FROM Event
+            INNER JOIN Location ON Event.locationID = Location.locationID
+            LEFT JOIN Ticket ON Event.eventID = Ticket.eventID
+            WHERE Event.hostID = ?
+            GROUP BY Event.eventID
+            ORDER BY Event.date DESC
+        """
+        
+        with sql.connect(dbName, check_same_thread=False) as conn:
+            response = conn.execute(my_query, (hostID,)).fetchall()
+		
+        if response:
+            result = []
+            for row in response:
+                event = {
+                    "Event ID": row[0],
+                    "Name": row[1],
+                    "Date": row[2],
+                    "Time": row[3],
+                    "Location": f"{row[4]}, {row[5]}, {row[6]}",
+                    "Tickets Sold": row[7]
+                }
+                result.append(event)
+            
+            return jsonify(result)
+        else:
+            return {"Not Found": "No events found for this host"}, 404
+		
+
+
+
+
+
+
+
+## hou u nog niet te veel bezig met HTML code, daarvoor kunnen we aan chatGPT vragen of een andere generator, 
+## eerst zorgen dat API werkt (queries correct kunnen uitvoeren)
+# @app.route('/')
+# def home():
+#     return render_template('index.html')
+
+
 ## add resources
-api.add_resource(PrivateR, '/private')
-# api.add_resource(EventsR, '/events')
-# api.add_resource(EventR, '/events/<int:eventID>')
+api.add_resource(EventsR, '/events', '/events/<string:category>', '/events/<int:eventID>')
+api.add_resource(HostEventsR, '/host/<int:hostID>/events')
+# api.add_resource(UpcomingEventsR, '/upcoming')
+api.add_resource(RegisterR, '/register')
+api.add_resource(LoginR, '/login')
+api.add_resource(LogoutR, '/logout')
+api.add_resource(UsersR, '/users', '/users/<int:userID>')
+api.add_resource(ShoppingCartR, '/cart/<int:userID>')
+
 
 
 if __name__ == '__main__':
-	app.run(debug=True) # enable debug mode -> show interactive traceback in the browser when an unhandled error occurs during a request, port=8080 if you want to use a specific port number
+	app.run(debug=True)

@@ -12,7 +12,7 @@ steps to take in this project:
 3 - learn how to make structured and working code based on my database
 4 - make a complete backend (server.py) with all necessary queries
 5 - make frontend (client.py) to communicate with backend
-6 - learn html to work with frontend
+6 - learn html to work with frontend -> make frontend pretty
 7 - look for additional functionalities
 8 - update/rework code
 """
@@ -26,7 +26,7 @@ api = Api(app)
 
 ## connection to database
 ## !! open and close the connection as close to the actual database operations as possible !!
-dbName = "my_database_V0.db"
+dbName = "autocreated.db"
 
 ## definition of classes
 
