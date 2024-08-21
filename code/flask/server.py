@@ -2,6 +2,7 @@ import flask
 from flask import Flask, request, jsonify, redirect, render_template
 from flask_restful import Resource, Api
 import sqlite3 as sql
+from flask import session
 
 
 """
@@ -20,6 +21,7 @@ steps to take in this project:
 
 ## creating app and its API
 app = Flask(__name__)
+app.secret_key = "mySecretKey123"  # stel een geheime sleutel in voor sessiebeveiliging
 api = Api(app)
 
 ## connection to database
@@ -28,89 +30,86 @@ dbName = "my_database_V0.db"
 
 ## definition of classes
 
-# 1 - HANDLE EVENTS
-# display all events, including the artists or bands, date, time and the location of the event, a poster image, the price of the tickets, the amount of tickets remaining and the event host
+# resource for displaying all events or a specific event, possibility to filter based on category
 class EventsR(Resource):
-	def get(self, category=None): # possibility to filter based on category
-		conn = sql.connect(dbName, check_same_thread=False) # connect to database, "Objects created in a thread can only be used in that same thread"
-
-		if category: # still need to test this
-			my_query = """SELECT DISTINCT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets
-						FROM Event
-						INNER JOIN Location ON Event.locationID = Location.locationID
-						INNER JOIN Host ON Event.hostID = Host.hostID
-						INNER JOIN User ON Host.userID = User.userID
-						INNER JOIN Ticket ON Event.eventID = Ticket.eventID
-						WHERE Event.category = ?
-						""" 
-						# still make sure only UPCOMING events are shown, preferrably in chronological order, 
-						# something like this:
-						# WHERE Event.date > strftime('%s', 'now') -- Filters for upcoming events
-						# ORDER BY Event.date ASC, Event.time ASC
-			response = conn.execute(my_query,(category,)).fetchall() # response type: list
-		else:
-			my_query = """SELECT DISTINCT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets
-						FROM Event
-						INNER JOIN Location ON Event.locationID = Location.locationID
-						INNER JOIN Host ON Event.hostID = Host.hostID
-						INNER JOIN User ON Host.userID = User.userID
-						INNER JOIN Ticket ON Event.eventID = Ticket.eventID
-						""" 
-						# still make sure only UPCOMING events are shown, preferrably in chronological order, 
-						# something like this:
-						# WHERE Event.date > strftime('%s', 'now') -- Filters for upcoming events
-						# ORDER BY Event.date ASC, Event.time ASC
-			response = conn.execute(my_query).fetchall() # response type: list
-		conn.close()
-		result = [
-			{
-                "Name": element[0],
-                "Date": element[1],
-                "Time": element[2],
-                "Location": element[3] + " " + element[4] + " " + element[5],
-                "Artist": element[6],
-                "Host": element[7] + " " + element[8],
-                "Link to poster": element[9],
-                "Ticket price": element[10],
-                "Tickets remaining": element[11]
-            }
-			for element in response
-		]
-		return jsonify({"events": result})
-	
-	def get_filtered(self,category):
-		conn = sql.connect(dbName, check_same_thread=False)
-		my_query = """SELECT DISTINCT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets
+	def get(self, category=None, eventID=None):
+		if eventID: # display specific event
+			my_query = """SELECT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets
 					  FROM Event
 					  INNER JOIN Location ON Event.locationID = Location.locationID
 					  INNER JOIN Host ON Event.hostID = Host.hostID
 					  INNER JOIN User ON Host.userID = User.userID
 					  INNER JOIN Ticket ON Event.eventID = Ticket.eventID
-					  WHERE Event.category = ?
+					  WHERE Event.eventID = ?
 					  """
-		response = conn.execute(my_query,(category,)).fetchall() # response type: list
-		conn.close()
-		result = [
-			{
-                "Name": element[0],
-                "Date": element[1],
-                "Time": element[2],
-                "Location": element[3] + " " + element[4] + " " + element[5],
-                "Artist": element[6],
-                "Host": element[7] + " " + element[8],
-                "Link to poster": element[9],
-                "Ticket price": element[10],
-                "Tickets remaining": element[11]
-            }
-			for element in response
-		]
-		return jsonify({"events": result})
+			with sql.connect(dbName, check_same_thread=False) as conn:
+				response = conn.execute(my_query, (eventID,)).fetchone() # FETCH ONE
+			if response: # dus als er een event is met dit eventID
+				result = {
+					"Name": response[0],
+					"Date": response[1],
+					"Time": response[2],
+					"Location": response[3] + " " + response[4] + " " + response[5],
+					"Artist": response[6],
+					"Host": response[7] + " " + response[8],
+					"Link to poster": response[9],
+					"Ticket price": response[10],
+					"Tickets remaining": response[11]
+				}
+				return jsonify(result)
+			else:
+				return {"Not Found": "Event not found"}, 404
+		else:
+			if category: # display events based on category
+				my_query = """SELECT DISTINCT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets
+							FROM Event
+							INNER JOIN Location ON Event.locationID = Location.locationID
+							INNER JOIN Host ON Event.hostID = Host.hostID
+							INNER JOIN User ON Host.userID = User.userID
+							INNER JOIN Ticket ON Event.eventID = Ticket.eventID
+							WHERE Event.category = ?
+							""" 
+							# still make sure only UPCOMING events are shown, preferrably in chronological order, 
+							# something like this:
+							# WHERE Event.date > strftime('%s', 'now') -- Filters for upcoming events
+							# ORDER BY Event.date ASC, Event.time ASC
+				with sql.connect(dbName, check_same_thread=False) as conn:
+					response = conn.execute(my_query,(category,)).fetchall() # response type: list			
+			else: # display all events
+				my_query = """SELECT DISTINCT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets
+							FROM Event
+							INNER JOIN Location ON Event.locationID = Location.locationID
+							INNER JOIN Host ON Event.hostID = Host.hostID
+							INNER JOIN User ON Host.userID = User.userID
+							INNER JOIN Ticket ON Event.eventID = Ticket.eventID
+							""" 
+							# still make sure only UPCOMING events are shown, preferrably in chronological order, 
+							# something like this:
+							# WHERE Event.date > strftime('%s', 'now') -- Filters for upcoming events
+							# ORDER BY Event.date ASC, Event.time ASC
+				with sql.connect(dbName, check_same_thread=False) as conn:
+					response = conn.execute(my_query).fetchall() # response type: list
+			result = [
+				{
+					"Name": element[0],
+					"Date": element[1],
+					"Time": element[2],
+					"Location": element[3] + " " + element[4] + " " + element[5],
+					"Artist": element[6],
+					"Host": element[7] + " " + element[8],
+					"Link to poster": element[9],
+					"Ticket price": element[10],
+					"Tickets remaining": element[11]
+				}
+				for element in response
+			]
+			return jsonify({"events": result})
+	
 	
 # # display all UPCOMING events	-----------> UNDER CONSTRUCTION, first fix date format
 """
 class UpcomingEventsR(Resource):
 	def get(self):
-		conn = sql.connect(dbName, check_same_thread=False) # connect to database, "Objects created in a thread can only be used in that same thread"
 		my_query = SELECT DISTINCT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets
 					  FROM Event
 					  INNER JOIN Location ON Event.locationID = Location.locationID
@@ -123,8 +122,8 @@ class UpcomingEventsR(Resource):
 					  # something like this:
 					  # WHERE Event.date > strftime('%s', 'now') -- Filters for upcoming events
 					  # ORDER BY Event.date ASC, Event.time ASC
-		response = conn.execute(my_query).fetchall() # response type: list
-		conn.close()
+		with sql.connect(dbName, check_same_thread=False) as conn:
+			response = conn.execute(my_query).fetchall() # response type: list
 		result = [
 			{
                 "Name": element[0],
@@ -142,35 +141,6 @@ class UpcomingEventsR(Resource):
 		return jsonify({"events": result})
 """
 
-# display a certain event
-class EventR(Resource):
-	def get(self, eventID):
-		conn = sql.connect(dbName, check_same_thread=False)
-		my_query = """SELECT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets
-					  FROM Event
-					  INNER JOIN Location ON Event.locationID = Location.locationID
-					  INNER JOIN Host ON Event.hostID = Host.hostID
-					  INNER JOIN User ON Host.userID = User.userID
-					  INNER JOIN Ticket ON Event.eventID = Ticket.eventID
-					  WHERE Event.eventID = ?
-					  """
-		response = conn.execute(my_query, (eventID,)).fetchone() # FETCH ONE
-		conn.close()
-		if response: # dus als er een event is met dit eventID
-			result = {
-				"Name": response[0],
-				"Date": response[1],
-				"Time": response[2],
-				"Location": response[3] + " " + response[4] + " " + response[5],
-				"Artist": response[6],
-				"Host": response[7] + " " + response[8],
-				"Link to poster": response[9],
-				"Ticket price": response[10],
-				"Tickets remaining": response[11]
-			}
-			return jsonify(result)
-		else:
-			return {"Not Found": "Event not found"}, 404
 
 # register a new user
 class RegisterR(Resource):
@@ -207,78 +177,87 @@ class LoginR(Resource):
 		password = request.json.get('password')
 
         # check whether user inputs are valid
-		conn = sql.connect(dbName, check_same_thread=False)
 		my_query = """SELECT * FROM User WHERE username=? AND password=?"""
-		response = conn.execute(my_query, (username, password)).fetchone() # als response != 0 bestaat deze user
-		conn.close()
+		with sql.connect(dbName, check_same_thread=False) as conn:
+			response = conn.execute(my_query, (username, password)).fetchone() # als response != 0 bestaat deze user
 		if response:
-			# return success message
+			# save username in current session
+			session['username'] = username
 			return {"OK": "Login successful"}, 200
 		
 		# trying to log in with a non-existing user
 		return {"Unauthorized": "Invalid login data"}, 401
 
-# get all users
-class UsersR(Resource):
-	def get(self):
-		conn = sql.connect(dbName, check_same_thread=False)
-		my_query = """SELECT * FROM User""" 
-		response = conn.execute(my_query).fetchall()
-		conn.close()
-		result = [
-			{
-                "userID": element[0],
-                "username": element[1],
-                "password": element[2],
-                "email": element[3],
-				"user type": element[4],
-				"first name": element[5],
-                "last name": element[6]
-            }
-			for element in response
-		]
-		return jsonify({"users": result})
-
-# get certain user	
-class UserR(Resource):
-	def get(self, userID):
-		conn = sql.connect(dbName, check_same_thread=False)
-		my_query = """SELECT * FROM User WHERE userID = ?"""
-		response = conn.execute(my_query, (userID,)).fetchone()
-		conn.close()
-		if response: # dus user bestaat
-			result = {
-				"userID": response[0],
-                "username": response[1],
-                "password": response[2],
-                "email": response[3],
-				"user type": response[4],
-				"first name": response[5],
-                "last name": response[6]
-			}
-			return jsonify(result)
+# resource om gebruiker uit te loggen
+class LogoutR(Resource):
+	def post(self):
+        # controleer of gebruiker is ingelogd
+		if 'username' in session:
+			session.pop('username', None)
+			return {"OK": "Logout successful"}, 200
 		else:
-			return {"Not Found": "User not found"}, 404
+			return {"Bad Request": "No user is currently logged in"}, 400
 
-# see user's shopping cart
+# resource to get all users or a specific user
+class UsersR(Resource):
+	def get(self, userID=None):
+		if userID:
+			my_query = """SELECT * FROM User WHERE userID = ?"""
+			with sql.connect(dbName, check_same_thread=False) as conn:
+				response = conn.execute(my_query, (userID,)).fetchone()
+			if response: # dus user bestaat
+				result = {
+					"userID": response[0],
+					"username": response[1],
+					"password": response[2],
+					"email": response[3],
+					"user type": response[4],
+					"first name": response[5],
+					"last name": response[6]
+				}
+				return jsonify(result)
+			else:
+				return {"Not Found": "User not found"}, 404
+		else:
+			my_query = """SELECT * FROM User""" 
+			with sql.connect(dbName, check_same_thread=False) as conn:
+				response = conn.execute(my_query).fetchall()
+			result = [
+				{
+					"userID": element[0],
+					"username": element[1],
+					"password": element[2],
+					"email": element[3],
+					"user type": element[4],
+					"first name": element[5],
+					"last name": element[6]
+				}
+				for element in response
+			]
+			return jsonify({"users": result})
+
+
+# resource to see or update user's shopping cart (still need to implement DELETE?)
 class ShoppingCartR(Resource):
 	def get(self, userID):
-		# first check if given userID exists
-		conn = sql.connect(dbName, check_same_thread=False)
+		# controleer of gebruiker is ingelogd
+		if 'username' not in session:
+			return {"Unauthorized": "Please log in to view your shopping cart"}, 401
+		
+		# check if given userID exists
 		my_query = """SELECT * FROM User WHERE userID = ?"""
-		response = conn.execute(my_query, (userID,)).fetchone()
-		conn.close()
+		with sql.connect(dbName, check_same_thread=False) as conn:
+			response = conn.execute(my_query, (userID,)).fetchone()
 		if response: # dus user bestaat
 			# then check whether shopping cart is empty or not
-			conn = sql.connect(dbName, check_same_thread=False)
 			my_query = """SELECT CartItem.quantity, Ticket.tier, Ticket.price, Event.name
 						FROM CartItem
 						INNER JOIN Ticket ON CartItem.ticketID = Ticket.ticketID
 						INNER JOIN Event ON Ticket.eventID = Event.eventID
 						INNER JOIN ShoppingCart ON CartItem.cartID = ShoppingCart.cartID
 						WHERE ShoppingCart.userID = ?"""
-			response = conn.execute(my_query, (userID,)).fetchall() # neem de hele shopping cart
-			conn.close()
+			with sql.connect(dbName, check_same_thread=False) as conn:
+				response = conn.execute(my_query, (userID,)).fetchall() # neem de hele shopping cart
 			if response: # dus geen lege shopping cart
 				result = [
                     {
@@ -342,11 +321,6 @@ class ShoppingCartR(Resource):
 		return {"Created": "Ticket added to shopping cart"}, 201
 		
 
-# class event_CatR(Resource):
-# 	def get(self,category):
-
-
-
 
 
 ## hou u nog niet te veel bezig met HTML code, daarvoor kunnen we aan chatGPT vragen of een andere generator, 
@@ -357,13 +331,12 @@ class ShoppingCartR(Resource):
 
 
 ## add resources
-api.add_resource(EventsR, '/events', '/events/<string:category>')
+api.add_resource(EventsR, '/events', '/events/<string:category>', '/events/<int:eventID>')
 # api.add_resource(UpcomingEventsR, '/upcoming')
-api.add_resource(EventR, '/events/<int:eventID>')
 api.add_resource(RegisterR, '/register')
 api.add_resource(LoginR, '/login')
-api.add_resource(UsersR, '/users')
-api.add_resource(UserR, '/users/<int:userID>')
+api.add_resource(LogoutR, '/logout')
+api.add_resource(UsersR, '/users', '/users/<int:userID>')
 api.add_resource(ShoppingCartR, '/cart/<int:userID>')
 
 
