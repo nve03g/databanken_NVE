@@ -1,6 +1,6 @@
-curl http://127.0.0.1:5000/register -H "Content-Type:application/json" -d '{"username":"testuserH", "password":"testpwH", "email":"testemailH", "hostName":"testHostName", "userType":"host"}' -X POST
+# curl http://127.0.0.1:5000/register -H "Content-Type:application/json" -d '{"username":"testuserH", "password":"testpwH", "email":"testemailH", "hostName":"testHostName", "userType":"host"}' -X POST
 
-# curl http://127.0.0.1:5000/login -H "Content-Type:application/json" -d '{"username":"commando_user6", "password":"testpw"}' -X POST  -c cookie.txt 
+curl http://127.0.0.1:5000/login -H "Content-Type:application/json" -d '{"username":"nellie", "password":"passwN"}' -X POST  -c cookie.txt 
 # met " -c cookie.txt" wordt sessiecookie opgeslagen in een bestand "cookie.txt"
 
 # curl http://127.0.0.1:5000/cart/10 -X GET -b cookie.txt
@@ -8,7 +8,7 @@ curl http://127.0.0.1:5000/register -H "Content-Type:application/json" -d '{"use
 
 # curl http://127.0.0.1:5000/events -X GET
 
-# curl http://127.0.0.1:5000/cart/1 -H "Content-Type:application/json" -d '{"eventName":"Angel Sounds", "ticketTier":"standing", "quantity":"2"}' -X POST
+curl http://127.0.0.1:5000/cart/1 -H "Content-Type:application/json" -d '{"eventName":"Rock Werchter 2024", "ticketTier":"dagticket", "quantity":"2"}' -X POST -b cookie.txt
 
 # curl http://127.0.0.1:5000/users/1 -X GET
 

@@ -183,7 +183,6 @@ class RegisterR(Resource):
         return {"Created": "User registered successfully"}, 201
 
 
-
 # login an existing user
 class LoginR(Resource):
 	def post(self): # this is a POST method because we're entering (posting) user login data to check whether they can log in or not, although we're not adding new data to the database
@@ -203,6 +202,7 @@ class LoginR(Resource):
 		# trying to log in with a non-existing user
 		return {"Unauthorized": "Invalid login data"}, 401
 
+
 # resource om gebruiker uit te loggen
 class LogoutR(Resource):
 	def post(self):
@@ -212,6 +212,7 @@ class LogoutR(Resource):
 			return {"OK": "Logout successful"}, 200
 		else:
 			return {"Bad Request": "No user is currently logged in"}, 400
+
 
 # resource to get all users or a specific user
 class UsersR(Resource):
@@ -263,7 +264,8 @@ class ShoppingCartR(Resource):
               FROM PurchaseItem
               INNER JOIN TicketTier ON PurchaseItem.ticketTierID = TicketTier.ticketTierID
               INNER JOIN Event ON TicketTier.eventID = Event.eventID
-              WHERE PurchaseItem.customerID = ?"""
+			  INNER JOIN Customer ON PurchaseItem.customerID = Customer.customerID
+              WHERE Customer.userID = ?"""
 
 			with sql.connect(dbName, check_same_thread=False) as conn:
 				response = conn.execute(my_query, (userID,)).fetchall() # neem de hele shopping cart
@@ -271,12 +273,11 @@ class ShoppingCartR(Resource):
 				result = [
                     {
                         "Quantity": element[0],
-                        "Ticket Tier": element[1],
-                        "Ticket Price": element[2],
-                        "Event Name": element[3]
+                        "Ticket tier": element[1],
+                        "Ticket price": element[2],
+                        "Event name": element[3]
                     }
                     for element in response]
-				# return jsonify(response)
 				return jsonify({"cart":result})
 			else:
 				return {"Not Found": "Shopping cart is empty"}, 404
@@ -293,42 +294,45 @@ class ShoppingCartR(Resource):
 		if not (eventName and ticketTier and quantity): # dus niet alle velden ingevuld
 			return {"Bad Request": "Missing required data"}, 400
 		
-		# check if user's shopping cart already exists
+        
+		# voeg item toe aan cart
+		#1- zoek customerID
 		conn = sql.connect(dbName, check_same_thread=False)
 		cursor = conn.cursor()
-		my_query = """SELECT purchaseItemID FROM PurchaseItem WHERE customerID = ?"""
-		response = cursor.execute(my_query, (userID, )).fetchone() # als response != 0 heeft user al een shopping cart
-
-		# als user nog geen shopping cart heeft, maak er een aan
-		# if response == 0:
-		if response is None: 
-			my_query = """INSERT INTO ShoppingCart (userID) VALUES (?)"""
-			cursor.execute(my_query, (userID, ))
-			conn.commit()
-			cartID = cursor.lastrowid # get cartID of the new cart
+		response = cursor.execute("""SELECT Customer.customerID 
+							  FROM Customer 
+							  INNER JOIN User ON User.userID = Customer.userID
+							  WHERE User.userID = ?""", (userID,)).fetchone()
+		if response:
+			customerID = response[0] # fetch customerID based on given userID
 		else:
-			cartID = response[0] # user already has a shopping cart
+			return {"Not Found": "User not found"}, 404
+	
 
-		# get ticketID based on eventName and ticketTier
-		my_query = """SELECT Ticket.ticketID FROM Ticket
-                      INNER JOIN Event ON Ticket.eventID = Event.eventID
-                      WHERE Event.name = ? AND Ticket.tier = ?"""
+		#2- get ticketTierID based on eventName and ticketTier
+		my_query = """SELECT TicketTier.ticketTierID FROM TicketTier
+                      INNER JOIN Event ON TicketTier.eventID = Event.eventID
+                      WHERE Event.name = ? AND TicketTier.description = ?"""
 		ticket = cursor.execute(my_query, (eventName, ticketTier)).fetchone()
-
 		if not ticket:  # if the ticket does not exist
 			conn.close()
 			return {"Bad Request": "Invalid event name or ticket tier"}, 400
+		ticketTierID = ticket[0]
 
-		ticketID = ticket[0]
-
-        # insert the new cart item
-		cursor.execute("""INSERT INTO CartItem (cartID, ticketID, quantity) VALUES (?, ?, ?)""", (cartID, ticketID, quantity))
+        # insert new item
+		my_query = """INSERT INTO PurchaseItem (customerID, ticketTierID, quantity) VALUES (?,?,?)"""
+		cursor.execute(my_query, (customerID, ticketTierID, quantity))
 		conn.commit()
+		purchaseItemID = cursor.lastrowid # get purchaseItemID of the newly added cart item
 		conn.close()
 
         # return success message
 		return {"Created": "Ticket added to shopping cart"}, 201
-		
+
+
+
+
+
 
 # resource to get all events for a specific host
 class HostEventsR(Resource):
