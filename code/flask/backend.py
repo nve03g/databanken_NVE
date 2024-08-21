@@ -133,35 +133,57 @@ class EventsR(Resource):
 				for element in response
 			]
 			return jsonify({"events": result})
-
+	
 
 # register a new user
 class RegisterR(Resource):
-	def post(self):
-		# collect new incoming user data
-		username = request.json.get("username")
-		password = request.json.get("password")
-		email = request.json.get("email")
-		firstName = request.json.get("firstName")
-		lastName = request.json.get("lastName")
-		userType = request.json.get("userType") # provide dropdown menu in HTML code
-
-		# check whether user already exists
-		conn = sql.connect(dbName, check_same_thread=False)
-		my_query = """SELECT * FROM User WHERE username=?"""
-		response = conn.execute(my_query, (username,)).fetchone() # als response == 0 is het een nieuwe user die wilt registreren
-		if response:
-			return {"Bad Request": "Username already taken"}, 400
+    def post(self):
+        # collect new incoming user data
+        username = request.json.get("username")
+        password = request.json.get("password")
+        email = request.json.get("email")
+        firstName = request.json.get("firstName")
+        lastName = request.json.get("lastName")
+        userType = request.json.get("userType") # host/customer, provide dropdown menu in HTML code?
+        hostName = request.json.get("hostName") # only required if userType is "host"
 		
-		# insert new user
-		cursor = conn.cursor()
-		cursor.execute("INSERT INTO User (username, password, email, firstName, lastName, userType) VALUES (?, ?, ?, ?, ?, ?)", (username, password, email, firstName, lastName, userType))
-		conn.commit()
-		conn.close()
+        # check whether user already exists
+        conn = sql.connect(dbName, check_same_thread=False)
 
-		# return success message
-		return {"Created": "User registered successfully"}, 201
-	
+        my_query = """SELECT * FROM User WHERE username=?"""
+        response = conn.execute(my_query, (username,)).fetchone() # als response == 0 is het een nieuwe user die wilt registreren
+        if response:
+            return {"Bad Request": "Username already taken"}, 400
+
+        # insert new user
+        cursor = conn.cursor()
+        # insert new user into the User table
+        cursor.execute("INSERT INTO User (username, password, email) VALUES (?, ?, ?)", (username, password, email))
+        conn.commit()
+
+        userID = cursor.lastrowid # get the userID of newly added user
+
+        # insert into Host or Customer table based on userType
+        if userType == "host":
+            if not hostName:  # ensure hostName is provided
+                conn.close()
+                return {"Bad Request": "Host name is required for host userType"}, 400
+            
+            # insert into the Host table
+            cursor.execute("INSERT INTO Host (userID, name) VALUES (?, ?)",(userID, hostName))
+        elif userType == "customer":
+            # insert into the Customer table
+            cursor.execute("INSERT INTO Customer (userID, firstName, lastName) VALUES (?, ?, ?)",(userID, firstName, lastName))
+        else:
+            conn.close()
+            return {"Bad Request": "Invalid user type"}, 400
+
+        conn.commit()
+        conn.close()
+        return {"Created": "User registered successfully"}, 201
+
+
+
 # login an existing user
 class LoginR(Resource):
 	def post(self): # this is a POST method because we're entering (posting) user login data to check whether they can log in or not, although we're not adding new data to the database
