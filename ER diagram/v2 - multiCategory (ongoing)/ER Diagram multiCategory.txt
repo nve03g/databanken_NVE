@@ -6,15 +6,15 @@ De centrale entiteit is Event, dit is een concreet event (vb. "Rock Werchter edi
 * dat doorgaat op een bepaald tijdstip (date / time)
 * op een bepaalde locatie (1 locationID FK)
 * geörganiseerd door een bepaalde host (1 hostID FK)
-* dat onder een bepaalde categorie valt (category)
+* dat onder een of meerdere categorieën valt (N:M relatie met Category entiteit)
 * waarop een reeks artiesten / bands komt optreden (artists)
 * en dat al dan niet momenteel tickets in de verkoop heeft (onSale)
 
-Gemaakte design keuzes om het enigszins simpel te houden:
+Gemaakte design keuzes:
 
-1. Een category is een simpele string, als attribuut van event, kan bvb. een enkele categorie beschrijven of meerdere categorieën oplijsten (comma separated). Volgens huidige requirements lijkt dit voldoende. Wanneer men zou moeten kunnen zoeken op events van een bepaalde categorie, kan dit uitgebreid worden naar een aparte entiteit Category met een N:M relatie naar Event.
+1. Category is een aparte entiteit met N:M relatie naar Event, vanwege het requirement om events te kunnen zoeken op basis van categorie.
 
-2. Analoog: 'artists' is momenteel een comma separated string attribuut van event, kan eventueel later aparte entiteit Artist worden met N:M relatie naar Event.
+2. Om het enigszins simpel te houden is 'artists' momenteel gemodelleerd als een comma separated string attribuut van event. Volgens huidige requirements lijkt dit voldoende. Wanneer men zou moeten kunnen zoeken op events waarop een bepaalde artist / band optreedt, kan dit uitgebreid worden naar een aparte entiteit Artist met een N:M relatie naar Event (Analoog aan Event X Category).
 
 Een event heeft 1 of meerdere TicketTiers, elk:
 
