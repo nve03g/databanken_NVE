@@ -1,0 +1,106 @@
+### HOLD SALES FOR EVENTS ###
+Om een kortingsactie voor evenementen te implementeren en deze te tonen wanneer een evenement in de aanbieding is, kun je de volgende stappen volgen:
+
+1. **Database aanpassingen:**
+   - Voeg een kolom toe aan de `Event`-tabel om de status van een evenement te markeren als 'in de aanbieding'.
+   - Voeg eventueel extra kolommen toe zoals de `discountPercentage` om de korting te berekenen.
+
+   ```sql
+   ALTER TABLE Event ADD COLUMN onSale BOOLEAN DEFAULT 0;
+   ALTER TABLE Event ADD COLUMN discountPercentage REAL DEFAULT 0.0;
+   ```
+
+2. **Backend aanpassingen:**
+
+   - **Update de `EventsR`-resource om de korting weer te geven:**
+
+     In de bestaande `EventsR`-klasse, moet je controleren of het evenement `onSale` is en, indien ja, de korting toepassen op de ticketprijs en dit weergeven.
+
+     ```python
+     class EventsR(Resource):
+         def get(self, category=None, eventID=None):
+             if eventID:  # Display specific event
+                 my_query = """SELECT Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, Event.artists, User.firstName, User.lastName, Event.posterURL, Ticket.price, Event.remainingTickets, Event.onSale, Event.discountPercentage
+                               FROM Event
+                               INNER JOIN Location ON Event.locationID = Location.locationID
+                               INNER JOIN Host ON Event.hostID = Host.hostID
+                               INNER JOIN User ON Host.userID = User.userID
+                               INNER JOIN Ticket ON Event.eventID = Ticket.eventID
+                               WHERE Event.eventID = ?
+                            """
+                 with sql.connect(dbName, check_same_thread=False) as conn:
+                     response = conn.execute(my_query, (eventID,)).fetchone()
+                 
+                 if response:
+                     price = response[10]
+                     if response[12]:  # Check if event is on sale
+                         price = price * (1 - response[13] / 100)
+                         
+                     result = {
+                         "Name": response[0],
+                         "Date": response[1],
+                         "Time": response[2],
+                         "Location": response[3] + " " + response[4] + " " + response[5],
+                         "Artist": response[6],
+                         "Host": response[7] + " " + response[8],
+                         "Link to poster": response[9],
+                         "Ticket price": price,
+                         "Tickets remaining": response[11],
+                         "On Sale": response[12],
+                         "Discount Percentage": response[13]
+                     }
+                     return jsonify(result)
+                 else:
+                     return {"Not Found": "Event not found"}, 404
+             
+             # Similar logic for category and all events with slight modifications
+             ...
+     ```
+
+   - **Nieuwe endpoint om een evenement in de aanbieding te zetten:**
+
+     Voeg een nieuwe `Resource` toe om een evenement in de aanbieding te zetten.
+
+     ```python
+     class SaleR(Resource):
+         def post(self, eventID):
+             # Collect sale data
+             discount = request.json.get("discountPercentage")
+
+             if not discount or not (0 <= discount <= 100):
+                 return {"Bad Request": "Invalid discount percentage"}, 400
+
+             # Set the event on sale
+             conn = sql.connect(dbName, check_same_thread=False)
+             my_query = """UPDATE Event SET onSale = 1, discountPercentage = ? WHERE eventID = ?"""
+             cursor = conn.cursor()
+             cursor.execute(my_query, (discount, eventID))
+             conn.commit()
+             conn.close()
+
+             return {"OK": "Event is now on sale"}, 200
+     ```
+
+3. **Frontend of API gebruik (optioneel):**
+
+   - **Curl-commando om een evenement in de aanbieding te zetten:**
+
+     ```bash
+     curl http://127.0.0.1:5000/sale/10 -H "Content-Type: application/json" -d '{"discountPercentage": 20}' -X POST
+     ```
+
+   - **Curl-commando om het aangepaste evenement met korting te bekijken:**
+
+     ```bash
+     curl http://127.0.0.1:5000/events/10 -X GET
+     ```
+
+4. **Resource toevoegen aan API:**
+
+   Vergeet niet om de nieuwe `Resource` aan de API toe te voegen:
+
+   ```python
+   api.add_resource(SaleR, '/sale/<int:eventID>')
+   ```
+
+Met deze stappen kun je evenementen in de aanbieding zetten, waarbij de korting zichtbaar wordt in de eventgegevens en correct wordt toegepast op de ticketprijzen.

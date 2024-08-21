@@ -321,6 +321,45 @@ class ShoppingCartR(Resource):
 		return {"Created": "Ticket added to shopping cart"}, 201
 		
 
+# resource to get all events for a specific host
+class HostEventsR(Resource):
+    def get(self, hostID):
+        my_query = """
+            SELECT Event.eventID, Event.name, Event.date, Event.time, Location.address, Location.city, Location.country, 
+                   COUNT(Ticket.ticketID) AS ticketsSold
+            FROM Event
+            INNER JOIN Location ON Event.locationID = Location.locationID
+            LEFT JOIN Ticket ON Event.eventID = Ticket.eventID
+            WHERE Event.hostID = ?
+            GROUP BY Event.eventID
+            ORDER BY Event.date DESC
+        """
+        
+        with sql.connect(dbName, check_same_thread=False) as conn:
+            response = conn.execute(my_query, (hostID,)).fetchall()
+		
+        if response:
+            result = []
+            for row in response:
+                event = {
+                    "Event ID": row[0],
+                    "Name": row[1],
+                    "Date": row[2],
+                    "Time": row[3],
+                    "Location": f"{row[4]}, {row[5]}, {row[6]}",
+                    "Tickets Sold": row[7]
+                }
+                result.append(event)
+            
+            return jsonify(result)
+        else:
+            return {"Not Found": "No events found for this host"}, 404
+		
+
+
+
+
+
 
 
 ## hou u nog niet te veel bezig met HTML code, daarvoor kunnen we aan chatGPT vragen of een andere generator, 
@@ -332,6 +371,7 @@ class ShoppingCartR(Resource):
 
 ## add resources
 api.add_resource(EventsR, '/events', '/events/<string:category>', '/events/<int:eventID>')
+api.add_resource(HostEventsR, '/host/<int:hostID>/events')
 # api.add_resource(UpcomingEventsR, '/upcoming')
 api.add_resource(RegisterR, '/register')
 api.add_resource(LoginR, '/login')
