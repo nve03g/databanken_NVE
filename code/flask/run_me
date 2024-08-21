@@ -1,4 +1,4 @@
-# curl http://127.0.0.1:5000/register -H "Content-Type:application/json" -d '{"username":"commando_user7", "password":"testpw", "email":"testemail", "firstName":"testFN", "lastName":"lasttest", "userType":"customer"}' -X POST
+curl http://127.0.0.1:5000/register -H "Content-Type:application/json" -d '{"username":"testuserH", "password":"testpwH", "email":"testemailH", "hostName":"testHostName", "userType":"host"}' -X POST
 
 # curl http://127.0.0.1:5000/login -H "Content-Type:application/json" -d '{"username":"commando_user6", "password":"testpw"}' -X POST  -c cookie.txt 
 # met " -c cookie.txt" wordt sessiecookie opgeslagen in een bestand "cookie.txt"
@@ -10,6 +10,6 @@
 
 # curl http://127.0.0.1:5000/cart/1 -H "Content-Type:application/json" -d '{"eventName":"Angel Sounds", "ticketTier":"standing", "quantity":"2"}' -X POST
 
-curl http://127.0.0.1:5000/users/1 -X GET
+# curl http://127.0.0.1:5000/users/1 -X GET
 
 # curl http://127.0.0.1:5000//events/Dance -X GET
